@@ -1,48 +1,65 @@
 ## About
 
-Transmission is a fast, easy, and free BitTorrent client. It comes in several flavors:
-  * A native macOS GUI application
-  * GTK+ and Qt GUI applications for Linux, BSD, etc.
-  * A headless daemon for servers and routers
-  * A web UI for remote controlling any of the above
+Fork of transmission 3.0 with skip verify option
+
+## Use carefully!
+
+This modification is only intended to speed up the addition of already verified torrents.  
+As an example: One primary instance and several secondary instances attached to the same media.  
+After the primary instance verifies the content, you can add the torrent to the secondary instances without additional verification.  
+It is recommended to use RO file system mount for secondary instances.
+
+## Thanks to
+
+@yangzhaofeng https://github.com/transmission/transmission/pull/769  
+@cfpp2p https://github.com/cfpp2p/transmission - I used this general idea from this fork by adapting it for the new version and refined the performance for large torrents 
+
+### How to skip verify with cli
+
+Use -T option
+
+    transmission-remote -t 1 -T # skip verify for torrent with index 1
+### How to skip verify via api (curl)
+
+For api usage is a torrent-skip-verify method
+For arguments look at rpc [protocol pt3.1](https://github.com/transmission/transmission/wiki/RPC-Protocol-Specification)
+
+You can use test script below:
+
+    #!/bin/bash
+    host="localhost" 
+    port="9091" 
+    if [ -z "$1" ]; then
+            echo "set filename" 
+            exit 0
+    fi
+    token=$(curl http://${host}:${port}/transmission/rpc -s \
+            | sed 's/.*Session-Id: \(.*\)<\/code>.*/\1/')
+    echo "token is ${token}" 
+    read -p "press enter to add torrent" 
+    filename=$1
+    hash=$(curl http://${host}:${port}/transmission/rpc -s \
+            -H "X-Transmission-Session-Id: ${token}" \
+            -H "Content-Type: application/json" \
+            -d '{"method": "torrent-add", "arguments": {"filename": "'${filename}'"}}'\
+            | sed 's/.*hashString\":\"\(.*\)\",\"id\".*/\1/ ') 
+    echo "Torrent hashcode is ${hash}" 
+    read -p "press enter to verify torrent" 
+    curl http://${host}:${port}/transmission/rpc -s \
+            -H "X-Transmission-Session-Id: ${token}" \
+            -H "Content-Type: application/json" \
+            -d '{"method": "torrent-skip-verify", "arguments": {"ids": ["'${hash}'"]}}'
+    read -p "press enter to delete torrent" 
+    curl http://${host}:${port}/transmission/rpc -s \
+            -H "X-Transmission-Session-Id: ${token}" \
+            -H "Content-Type: application/json" \
+            -d '{"method": "torrent-remove", "arguments": {"ids": ["'${hash}'"]}}'
 
 Visit https://transmissionbt.com/ for more information.
 
-## Command line interface notes
-
-Transmission is fully supported in transmission-remote, the preferred cli client.
-
-Three standalone tools to examine, create, and edit .torrent files exist: transmission-show, transmission-create, and transmission-edit, respectively.
-
-Prior to development of transmission-remote, the standalone client transmission-cli was created. Limited to a single torrent at a time, transmission-cli is deprecated and exists primarily to support older hardware dependent upon it. In almost all instances, transmission-remote should be used instead.
-
-Different distributions may choose to package any or all of these tools in one or more separate packages.
-
-## Building
-
-Transmission has an Xcode project file (Transmission.xcodeproj) for building in Xcode.
-
-For a more detailed description, and dependencies, visit: https://github.com/transmission/transmission/wiki
-
-### Building a Transmission release from the command line
-
-    $ tar xf transmission-2.92.tar.xz
-    $ cd transmission-2.92
-    $ mkdir build
-    $ cd build
-    $ cmake ..
-    $ make
-    $ sudo make install
-
-### Building Transmission from the nightly builds
-
-Download a tarball from https://build.transmissionbt.com/job/trunk-linux/ and follow the steps from the previous section.
-
-If you're new to building programs from source code, this is typically easier than building from Git.
-
 ### Building Transmission from Git (first time)
 
-    $ git clone https://github.com/transmission/transmission Transmission
+    $ git clone https://github.com/batkom/transmission_skip_verify Transmission
     $ cd Transmission
     $ git submodule update --init
     $ mkdir build
@@ -60,16 +77,3 @@ If you're new to building programs from source code, this is typically easier th
     $ cmake ..
     $ make
     $ sudo make install
-
-## Contributing
-
-### Code Style
-
-You would want to setup your editor to make use of the uncrustify.cfg file located in the root of this repository and the eslint/prettier rules in web/package.json.
-
-If for some reason you are unwilling or unable to do so, there is a shell script which you could run either directly or via docker-compose:
-
-    $ ./code_style.sh
-    or
-    $ docker-compose build --pull
-    $ docker-compose run --rm code_style
